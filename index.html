@@ -217,177 +217,8 @@ footer .right{margin-left:auto;color:var(--dimmer)}
 
 .section-title{font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:2px;padding:6px 10px 3px;border-bottom:1px solid var(--border);flex-shrink:0;text-transform:uppercase}
 </style>
-<!-- ═══ FIREBASE AUTH ═══ -->
-<!-- Firebase compat SDK (works everywhere, no module bundler needed) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyDYZO4FRBa6C160n88Cn-efDtSftlGMIsg",
-  authDomain: "ccl-analyzer.firebaseapp.com",
-  projectId: "ccl-analyzer",
-  storageBucket: "ccl-analyzer.firebasestorage.app",
-  messagingSenderId: "396396367294",
-  appId: "1:396396367294:web:26ac3776d32a49e2213def"
-};
+<!-- Firebase loaded at end of body -->
 
-firebase.initializeApp(firebaseConfig);
-const _fbAuth = firebase.auth();
-const _fbDb   = firebase.firestore();
-
-const ADMIN_EMAIL = 'martin.e.vitolo@gmail.com';
-
-// ── AUTH STATE ──────────────────────────────────────────────────────
-_fbAuth.onAuthStateChanged(async function(user) {
-  if(!user){ showAuthScreen(); return; }
-  try {
-    const docSnap = await _fbDb.collection('authorized_users').doc(user.email).get();
-    if(!docSnap.exists){
-      await _fbAuth.signOut();
-      showAuthScreen('Tu cuenta no está autorizada. Contactá al administrador.');
-      return;
-    }
-    await _fbDb.collection('authorized_users').doc(user.email).set(
-      { lastAccess: new Date().toISOString() }, { merge: true }
-    );
-    hideAuthScreen(user);
-  } catch(e) {
-    console.error('Auth check error:', e);
-    showAuthScreen('Error al verificar acceso: ' + e.message);
-  }
-});
-
-// ── LOGIN ───────────────────────────────────────────────────────────
-window._fbLogin = async function(){
-  const email = document.getElementById('authEmail').value.trim();
-  const pass  = document.getElementById('authPass').value;
-  const errEl = document.getElementById('authError');
-  errEl.style.color = '#ff2d55';
-  errEl.textContent = '';
-  if(!email||!pass){ errEl.textContent='Completá email y contraseña.'; return; }
-  const btn = document.getElementById('authBtn');
-  btn.disabled = true;
-  btn.textContent = 'Ingresando...';
-  try {
-    await _fbAuth.signInWithEmailAndPassword(email, pass);
-  } catch(e) {
-    const msgs = {
-      'auth/user-not-found':     'Email no registrado.',
-      'auth/wrong-password':     'Contraseña incorrecta.',
-      'auth/invalid-credential': 'Email o contraseña incorrectos.',
-      'auth/invalid-email':      'Email inválido.',
-      'auth/too-many-requests':  'Demasiados intentos. Esperá unos minutos.',
-    };
-    errEl.textContent = msgs[e.code] || e.message;
-    btn.disabled = false;
-    btn.textContent = 'INGRESAR';
-  }
-};
-
-// ── RESET PASSWORD ──────────────────────────────────────────────────
-window._fbResetPass = async function(){
-  const email = document.getElementById('authEmail').value.trim();
-  const errEl = document.getElementById('authError');
-  if(!email){ errEl.style.color='#ff2d55'; errEl.textContent='Ingresá tu email primero.'; return; }
-  try {
-    await _fbAuth.sendPasswordResetEmail(email);
-    errEl.style.color = '#00ff99';
-    errEl.textContent = '✓ Email de recuperación enviado. Revisá tu bandeja.';
-  } catch(e) {
-    errEl.style.color = '#ff2d55';
-    errEl.textContent = 'Error: ' + e.message;
-  }
-};
-
-// ── LOGOUT ──────────────────────────────────────────────────────────
-window._fbLogout = async function(){
-  if(!confirm('¿Cerrar sesión?')) return;
-  await _fbAuth.signOut();
-};
-
-// ── ADMIN: ADD USER ─────────────────────────────────────────────────
-window._fbAddUser = async function(){
-  const email = document.getElementById('adminNewEmail').value.trim().toLowerCase();
-  if(!email||!email.includes('@')){ alert('Email inválido'); return; }
-  try {
-    await _fbDb.collection('authorized_users').doc(email).set({
-      email, createdAt: new Date().toISOString(),
-      addedBy: _fbAuth.currentUser ? _fbAuth.currentUser.email : 'admin'
-    });
-    document.getElementById('adminNewEmail').value = '';
-    _fbLoadUsers();
-    alert('✓ Usuario autorizado: ' + email);
-  } catch(e) { alert('Error: ' + e.message); }
-};
-
-// ── ADMIN: REVOKE USER ──────────────────────────────────────────────
-window._fbRevokeUser = async function(email){
-  if(!confirm('¿Revocar acceso a ' + email + '?')) return;
-  try {
-    await _fbDb.collection('authorized_users').doc(email).delete();
-    _fbLoadUsers();
-  } catch(e) { alert('Error: ' + e.message); }
-};
-
-// ── ADMIN: LOAD USER LIST ───────────────────────────────────────────
-window._fbLoadUsers = async function(){
-  const list = document.getElementById('adminUserList');
-  if(!list) return;
-  list.innerHTML = '<div style="color:#3a5568;font-size:10px;font-family:monospace">Cargando...</div>';
-  try {
-    const snap = await _fbDb.collection('authorized_users').get();
-    const users = [];
-    snap.forEach(function(d){ users.push(d.data()); });
-    users.sort(function(a,b){ return (a.email||'').localeCompare(b.email||''); });
-    list.innerHTML = users.map(function(u){
-      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1e3050">' +
-        '<span style="flex:1;font-family:monospace;font-size:10px;color:#b8ccd8">' + u.email + '</span>' +
-        '<span style="font-size:9px;color:#3a5568">' + (u.lastAccess ? u.lastAccess.slice(0,10) : '—') + '</span>' +
-        (u.email === ADMIN_EMAIL
-          ? '<span style="font-size:9px;color:#ff8c00;font-family:monospace">ADMIN</span>'
-          : '<button onclick="_fbRevokeUser('' + u.email + '')" ' +
-            'style="font-size:9px;padding:2px 8px;background:none;border:1px solid #ff2d55;' +
-            'color:#ff2d55;cursor:pointer;border-radius:2px">Revocar</button>') +
-        '</div>';
-    }).join('');
-  } catch(e) {
-    list.innerHTML = '<div style="color:#ff2d55;font-size:10px">Error: ' + e.message + '</div>';
-  }
-};
-
-// ── SHOW / HIDE AUTH SCREEN ─────────────────────────────────────────
-function showAuthScreen(msg){
-  document.getElementById('authScreen').style.display = 'flex';
-  document.getElementById('appRoot').style.display = 'none';
-  if(msg){
-    var errEl = document.getElementById('authError');
-    errEl.style.color = '#ff2d55';
-    errEl.textContent = msg;
-  }
-  var btn = document.getElementById('authBtn');
-  if(btn){ btn.disabled = false; btn.textContent = 'INGRESAR'; }
-}
-
-function hideAuthScreen(user){
-  document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('appRoot').style.display = 'block';
-  var infoEl = document.getElementById('userInfo');
-  if(infoEl){ infoEl.textContent = user.email; infoEl.style.display = 'inline'; }
-  var adminBtn = document.getElementById('btnAdminPanel');
-  if(adminBtn) adminBtn.style.display = user.email === ADMIN_EMAIL ? 'inline-block' : 'none';
-  var logoutBtn = document.getElementById('btnLogout');
-  if(logoutBtn) logoutBtn.style.display = 'inline-block';
-}
-
-// ── KEYBOARD LISTENERS ──────────────────────────────────────────────
-window.addEventListener('load', function(){
-  var passEl = document.getElementById('authPass');
-  var emailEl = document.getElementById('authEmail');
-  if(passEl) passEl.addEventListener('keydown', function(e){ if(e.key==='Enter') window._fbLogin(); });
-  if(emailEl) emailEl.addEventListener('keydown', function(e){ if(e.key==='Enter' && passEl) passEl.focus(); });
-});
-</script>
 
 </head>
 <body>
@@ -7452,5 +7283,177 @@ openDB().then(()=>{
 initThree();
 </script>
 </div><!-- /appRoot -->
+
+<!-- ═══ FIREBASE — loaded at end of body so DOM is ready ═══ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDYZO4FRBa6C160n88Cn-efDtSftlGMIsg",
+  authDomain: "ccl-analyzer.firebaseapp.com",
+  projectId: "ccl-analyzer",
+  storageBucket: "ccl-analyzer.firebasestorage.app",
+  messagingSenderId: "396396367294",
+  appId: "1:396396367294:web:26ac3776d32a49e2213def"
+};
+
+firebase.initializeApp(firebaseConfig);
+const _fbAuth = firebase.auth();
+const _fbDb   = firebase.firestore();
+
+const ADMIN_EMAIL = 'martin.e.vitolo@gmail.com';
+
+// ── AUTH STATE ──────────────────────────────────────────────────────
+_fbAuth.onAuthStateChanged(async function(user) {
+  if(!user){ showAuthScreen(); return; }
+  try {
+    const docSnap = await _fbDb.collection('authorized_users').doc(user.email).get();
+    if(!docSnap.exists){
+      await _fbAuth.signOut();
+      showAuthScreen('Tu cuenta no está autorizada. Contactá al administrador.');
+      return;
+    }
+    await _fbDb.collection('authorized_users').doc(user.email).set(
+      { lastAccess: new Date().toISOString() }, { merge: true }
+    );
+    hideAuthScreen(user);
+  } catch(e) {
+    console.error('Auth check error:', e);
+    showAuthScreen('Error al verificar acceso: ' + e.message);
+  }
+});
+
+// ── LOGIN ───────────────────────────────────────────────────────────
+window._fbLogin = async function(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass  = document.getElementById('authPass').value;
+  const errEl = document.getElementById('authError');
+  errEl.style.color = '#ff2d55';
+  errEl.textContent = '';
+  if(!email||!pass){ errEl.textContent='Completá email y contraseña.'; return; }
+  const btn = document.getElementById('authBtn');
+  btn.disabled = true;
+  btn.textContent = 'Ingresando...';
+  try {
+    await _fbAuth.signInWithEmailAndPassword(email, pass);
+  } catch(e) {
+    const msgs = {
+      'auth/user-not-found':     'Email no registrado.',
+      'auth/wrong-password':     'Contraseña incorrecta.',
+      'auth/invalid-credential': 'Email o contraseña incorrectos.',
+      'auth/invalid-email':      'Email inválido.',
+      'auth/too-many-requests':  'Demasiados intentos. Esperá unos minutos.',
+    };
+    errEl.textContent = msgs[e.code] || e.message;
+    btn.disabled = false;
+    btn.textContent = 'INGRESAR';
+  }
+};
+
+// ── RESET PASSWORD ──────────────────────────────────────────────────
+window._fbResetPass = async function(){
+  const email = document.getElementById('authEmail').value.trim();
+  const errEl = document.getElementById('authError');
+  if(!email){ errEl.style.color='#ff2d55'; errEl.textContent='Ingresá tu email primero.'; return; }
+  try {
+    await _fbAuth.sendPasswordResetEmail(email);
+    errEl.style.color = '#00ff99';
+    errEl.textContent = '✓ Email de recuperación enviado. Revisá tu bandeja.';
+  } catch(e) {
+    errEl.style.color = '#ff2d55';
+    errEl.textContent = 'Error: ' + e.message;
+  }
+};
+
+// ── LOGOUT ──────────────────────────────────────────────────────────
+window._fbLogout = async function(){
+  if(!confirm('¿Cerrar sesión?')) return;
+  await _fbAuth.signOut();
+};
+
+// ── ADMIN: ADD USER ─────────────────────────────────────────────────
+window._fbAddUser = async function(){
+  const email = document.getElementById('adminNewEmail').value.trim().toLowerCase();
+  if(!email||!email.includes('@')){ alert('Email inválido'); return; }
+  try {
+    await _fbDb.collection('authorized_users').doc(email).set({
+      email, createdAt: new Date().toISOString(),
+      addedBy: _fbAuth.currentUser ? _fbAuth.currentUser.email : 'admin'
+    });
+    document.getElementById('adminNewEmail').value = '';
+    _fbLoadUsers();
+    alert('✓ Usuario autorizado: ' + email);
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+// ── ADMIN: REVOKE USER ──────────────────────────────────────────────
+window._fbRevokeUser = async function(email){
+  if(!confirm('¿Revocar acceso a ' + email + '?')) return;
+  try {
+    await _fbDb.collection('authorized_users').doc(email).delete();
+    _fbLoadUsers();
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+// ── ADMIN: LOAD USER LIST ───────────────────────────────────────────
+window._fbLoadUsers = async function(){
+  const list = document.getElementById('adminUserList');
+  if(!list) return;
+  list.innerHTML = '<div style="color:#3a5568;font-size:10px;font-family:monospace">Cargando...</div>';
+  try {
+    const snap = await _fbDb.collection('authorized_users').get();
+    const users = [];
+    snap.forEach(function(d){ users.push(d.data()); });
+    users.sort(function(a,b){ return (a.email||'').localeCompare(b.email||''); });
+    list.innerHTML = users.map(function(u){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1e3050">' +
+        '<span style="flex:1;font-family:monospace;font-size:10px;color:#b8ccd8">' + u.email + '</span>' +
+        '<span style="font-size:9px;color:#3a5568">' + (u.lastAccess ? u.lastAccess.slice(0,10) : '—') + '</span>' +
+        (u.email === ADMIN_EMAIL
+          ? '<span style="font-size:9px;color:#ff8c00;font-family:monospace">ADMIN</span>'
+          : '<button onclick="_fbRevokeUser('' + u.email + '')" ' +
+            'style="font-size:9px;padding:2px 8px;background:none;border:1px solid #ff2d55;' +
+            'color:#ff2d55;cursor:pointer;border-radius:2px">Revocar</button>') +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="color:#ff2d55;font-size:10px">Error: ' + e.message + '</div>';
+  }
+};
+
+// ── SHOW / HIDE AUTH SCREEN ─────────────────────────────────────────
+function showAuthScreen(msg){
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('appRoot').style.display = 'none';
+  if(msg){
+    var errEl = document.getElementById('authError');
+    errEl.style.color = '#ff2d55';
+    errEl.textContent = msg;
+  }
+  var btn = document.getElementById('authBtn');
+  if(btn){ btn.disabled = false; btn.textContent = 'INGRESAR'; }
+}
+
+function hideAuthScreen(user){
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appRoot').style.display = 'block';
+  var infoEl = document.getElementById('userInfo');
+  if(infoEl){ infoEl.textContent = user.email; infoEl.style.display = 'inline'; }
+  var adminBtn = document.getElementById('btnAdminPanel');
+  if(adminBtn) adminBtn.style.display = user.email === ADMIN_EMAIL ? 'inline-block' : 'none';
+  var logoutBtn = document.getElementById('btnLogout');
+  if(logoutBtn) logoutBtn.style.display = 'inline-block';
+}
+
+// ── KEYBOARD LISTENERS ──────────────────────────────────────────────
+window.addEventListener('load', function(){
+  var passEl = document.getElementById('authPass');
+  var emailEl = document.getElementById('authEmail');
+  if(passEl) passEl.addEventListener('keydown', function(e){ if(e.key==='Enter') window._fbLogin(); });
+  if(emailEl) emailEl.addEventListener('keydown', function(e){ if(e.key==='Enter' && passEl) passEl.focus(); });
+});
+</script>
+
 </body>
 </html>
