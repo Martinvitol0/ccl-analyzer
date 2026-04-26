@@ -329,8 +329,7 @@ footer .right{margin-left:auto;color:var(--dimmer)}
   </div>
 </div>
 
-<!-- ═══ APP ROOT ═══ -->
-<div id="appRoot" style="display:none">
+<!-- app runs normally, auth screen is a fixed overlay above -->
 
 <header style="position:relative">
   <div class="logo" style="display:flex;flex-direction:column;line-height:1.2">
@@ -7282,7 +7281,6 @@ openDB().then(()=>{
 }).catch(e=>console.warn('IndexedDB not available:',e));
 initThree();
 </script>
-</div><!-- /appRoot -->
 
 <!-- ═══ FIREBASE — loaded at end of body so DOM is ready ═══ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -7433,7 +7431,6 @@ window._fbLoadUsers = function() {
 
 function showAuthScreen(msg) {
   document.getElementById('authScreen').style.display = 'flex';
-  document.getElementById('appRoot').style.display = 'none';
   if (msg) {
     var errEl = document.getElementById('authError');
     errEl.style.color = '#ff2d55';
@@ -7445,7 +7442,6 @@ function showAuthScreen(msg) {
 
 function hideAuthScreen(user) {
   document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('appRoot').style.display = 'block';
   var infoEl = document.getElementById('userInfo');
   if (infoEl) { infoEl.textContent = user.email; infoEl.style.display = 'inline'; }
   var adminBtn = document.getElementById('btnAdminPanel');
